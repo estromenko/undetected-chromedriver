@@ -766,8 +766,9 @@ class Chrome(selenium.webdriver.chrome.webdriver.WebDriver):
             self.service.process.kill()
             # has to be closed manually, otherwise socket to driver process gets leaked in CLOSE_WAIT
             self.command_executor.close()
+            os.waitpid(self.service.process.pid, 0)
             logger.debug("webdriver process ended")
-        except (AttributeError, RuntimeError, OSError):
+        except (AttributeError, ChildProcessError, RuntimeError, OSError):
             pass
         try:
             self.reactor.event.set()
@@ -776,6 +777,7 @@ class Chrome(selenium.webdriver.chrome.webdriver.WebDriver):
             pass
         try:
             os.kill(self.browser_pid, 15)
+            os.waitpid(self.browser_pid, 0)
             logger.debug("gracefully closed browser")
         except Exception as e:  # noqa
             pass
@@ -855,6 +857,12 @@ class Chrome(selenium.webdriver.chrome.webdriver.WebDriver):
             and hasattr(self.service.process, "kill")
         ):
             self.service.process.kill()
+
+            try:
+                # Prevent zombie processes
+                os.waitpid(self.service.process.pid, 0)
+            except ChildProcessError:
+                pass
 
 
 def find_chrome_executable():
